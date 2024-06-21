@@ -1,2 +1,7 @@
+# builds
+cmake-build-debug/
 build/**
 **.o
+
+# project files
+.idea/

@@ -1,3 +1,7 @@
+#include "json.hpp"
+using json = nlohmann::json;
+json config;
+
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "imgui.h"
@@ -10,138 +14,27 @@
 #include <iostream>
 #include <ft2build.h>
 #include <map>
-
-std::map<char, GLuint> character_textures;
-std::map<char, glm::ivec2> character_sizes;
-std::map<char, glm::ivec2> character_bearings;
-std::map<char, GLuint> character_advances;
-
-#include FT_FREETYPE_H
-
-// FT_Library library;
-// FT_Face face;
+#include <iostream>
+#include <fstream>
+// #include "shaders.hpp"
+// #include "FrameRateCalculator.hpp"
+#include "InputController.hpp"
+#include "Text.hpp"
+#include <fmt/format.h>
 
 GLuint shader_program;
 GLuint text_shader_program;
-int width = 800;
-int height = 600;
-int padding = 20;
 
+float offsetX = 0;
+float offsetY = 0;
+int width = 0;
+int height = 0;
 
-float cell_height = 30.0f;
-float cell_width = 100.0f;
+void set_projection() {
+    glm::mat4 projection = glm::ortho(-(float)config["padding"], (float)width-(float)config["padding"], float(height)-(float)config["padding"], -(float)config["padding"], -1.0f, 1.0f); // adjust for top-left origin
 
-void load_font_textures(const char* font_path) {
-    FT_Library ft;
-    if (FT_Init_FreeType(&ft)) {
-        std::cerr << "Could not init FreeType Library" << std::endl;
-        return;
-    }
-
-    FT_Face face;
-    if (FT_New_Face(ft, font_path, 0, &face)) {
-        std::cerr << "Failed to load font" << std::endl;
-        return;
-    }
-
-    FT_Set_Pixel_Sizes(face, 0, 30);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // disable byte-alignment restriction
-
-    for (GLubyte c = 0; c < 128; c++) {
-        // load character glyph
-        if (FT_Load_Char(face, c, FT_LOAD_RENDER)) {
-            std::cerr << "Failed to load Glyph" << std::endl;
-            continue;
-        }
-        // generate texture
-        GLuint texture;
-        glGenTextures(1, &texture);
-        glBindTexture(GL_TEXTURE_2D, texture);
-        glTexImage2D(
-            GL_TEXTURE_2D,
-            0,
-            GL_RED,
-            face->glyph->bitmap.width,
-            face->glyph->bitmap.rows,
-            0,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            face->glyph->bitmap.buffer
-        );
-        // set texture options
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-        // store character information
-        character_textures[c] = texture;
-        character_sizes[c] = glm::ivec2(face->glyph->bitmap.width, face->glyph->bitmap.rows);
-        character_bearings[c] = glm::ivec2(face->glyph->bitmap_left, face->glyph->bitmap_top);
-        character_advances[c] = face->glyph->advance.x;
-    }
-
-    FT_Done_Face(face);
-    FT_Done_FreeType(ft);
-}
-
-
-
-const char* vertex_shader_source = R"(
-#version 330 core
-layout(location = 0) in vec2 aPos;
-uniform mat4 projection;
-void main() {
-    gl_Position = projection * vec4(aPos, 0.0, 1.0);
-}
-)";
-
-const char* fragment_shader_source = R"(
-#version 330 core
-out vec4 FragColor;
-void main() {
-    FragColor = vec4(0.0, 0.0, 0.0, 1.0);
-}
-)";
-
-
-const char* text_vertex_shader_source = R"(
-#version 330 core
-layout(location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>
-out vec2 TexCoords;
-
-uniform mat4 projection;
-
-void main() {
-    gl_Position = projection * vec4(vertex.xy, 0.0, 1.0);
-    TexCoords = vertex.zw;
-}
-)";
-
-
-const char* text_fragment_shader_source = R"(
-#version 330 core
-in vec2 TexCoords;
-out vec4 FragColor;
-
-uniform sampler2D text;
-uniform vec3 textColor;
-
-void main() {
-    vec4 sampled = vec4(1.0, 1.0, 1.0, texture(text, TexCoords).r);
-    FragColor = vec4(textColor, 1.0) * sampled;
-}
-)";
-
-
-
-void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    glViewport(0.0f, 0.0f, width, height);
-
-    glm::mat4 projection = glm::ortho(-(float)padding, (float)width-(float)padding, float(height)-(float)padding, -(float)padding, -1.0f, 1.0f); // adjust for top-left origin
     glUseProgram(shader_program);
-    int projection_loc = glGetUniformLocation(shader_program, "projection");
-    glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(glGetUniformLocation(shader_program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
 
     glUseProgram(text_shader_program);
     glUniformMatrix4fv(glGetUniformLocation(text_shader_program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
@@ -159,14 +52,11 @@ void compile_shader(GLuint shader, const char* source) {
     }
 }
 
-GLuint create_text_shader_program() {
+GLuint create_shader_program(const char* vert_src, const char* frag_src) {
     GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    compile_shader(vertex_shader, text_vertex_shader_source);
+    compile_shader(vertex_shader, vert_src);
     GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    compile_shader(fragment_shader, text_fragment_shader_source);
-
-    // GLuint vertex_shader = compile_shader(GL_VERTEX_SHADER, text_vertex_shader_source);
-    // GLuint fragment_shader = compile_shader(GL_FRAGMENT_SHADER, text_fragment_shader_source);
+    compile_shader(fragment_shader, frag_src);
 
     GLuint shader_program = glCreateProgram();
     glAttachShader(shader_program, vertex_shader);
@@ -187,16 +77,37 @@ GLuint create_text_shader_program() {
     return shader_program;
 }
 
-void compute_cell_text_coords(int i, int j, float *x, float *y) {
-    *x = cell_width * (i - 1) + 1.0f;
-    *y = cell_height * (j - 1) - 1.0f;
+
+void read_config_json(json& config) {
+    std::ifstream input_file("config.json");
+    input_file >> config;
 }
 
 
+void setSelectedCellColor(GLuint shader_program, const glm::vec4& color, const glm::vec2& pos, const glm::vec2& size) {
+    GLint selectedCellColorLoc = glGetUniformLocation(shader_program, "selectedCellColor");
+    GLint selectedCellPosLoc = glGetUniformLocation(shader_program, "selectedCellPos");
+    GLint cellSizeLoc = glGetUniformLocation(shader_program, "cellSize");
+
+    glUseProgram(shader_program);
+    glUniform4fv(selectedCellColorLoc, 1, glm::value_ptr(color));
+    glUniform2fv(selectedCellPosLoc, 1, glm::value_ptr(pos));
+    glUniform2fv(cellSizeLoc, 1, glm::value_ptr(size));
+}
+
+void changeSelectedCell(std::vector<float>& grid_vertices, glm::vec2& selectedCellPos, const glm::vec2& oldCellPos) {
+    size_t n = grid_vertices.size();
+    for (int j = n-2; j >= n-16; j -= 2) {
+        grid_vertices[j] += (selectedCellPos.x - oldCellPos.x);
+        grid_vertices[j+1] += (selectedCellPos.y - oldCellPos.y);
+    }
+}
+
 int main() {
-
     std::vector<std::string> event_log;
+    FrameRateCalculator framerate_calculator;
 
+    read_config_json(config);
     // initialize glfw
     if (!glfwInit()) {
         return -1;
@@ -208,7 +119,7 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
     // create window
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Grid", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(config["width"], config["height"], "Grid", nullptr, nullptr);
     if (!window) {
         glfwTerminate();
         return -1;
@@ -216,72 +127,81 @@ int main() {
     glfwMakeContextCurrent(window);
 
     // initialize glad
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
         return -1;
     }
 
     // set viewport
-    glViewport(0, 0, 800, 600);
+    glViewport(0,0, config["width"], config["height"]);
+
+    auto framebuffer_size_callback = [](GLFWwindow* window, int w, int h) {
+        glViewport(0.0f, 0.0f, w, h);
+
+        width = w; height = h;
+
+        set_projection();
+    };
+
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
-    // compile shaders
-    GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    compile_shader(vertex_shader, vertex_shader_source);
-    GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
-    compile_shader(fragment_shader, fragment_shader_source);
+    shader_program = create_shader_program(shaders::vertex_shader_source, shaders::fragment_shader_source);
+    text_shader_program = create_shader_program(shaders::text_vertex_shader_source, shaders::text_fragment_shader_source);
 
-    // link shaders
-    shader_program = glCreateProgram();
-    glAttachShader(shader_program, vertex_shader);
-    glAttachShader(shader_program, fragment_shader);
-    glLinkProgram(shader_program);
-    glDeleteShader(vertex_shader);
-    glDeleteShader(fragment_shader);
+    load_font_textures(config["font"].get<std::string>().c_str());
 
-    text_shader_program = create_text_shader_program();
+    glUseProgram(shader_program);
 
-    load_font_textures("/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf");
-    // check for linking errors
-    int success;
-    glGetProgramiv(shader_program, GL_LINK_STATUS, &success);
-    if (!success) {
-        char info_log[512];
-        glGetProgramInfoLog(shader_program, 512, nullptr, info_log);
-        std::cerr << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << info_log << std::endl;
-    }
-
-    glUseProgram(shader_program); // ensure the shader program is in use
-    // initialize the projection matrix
-    glm::mat4 projection = glm::ortho(-(float)padding, (float)width-(float)padding, float(height)-(float)padding, -(float)padding, -1.0f, 1.0f); // adjust for top-left origin
-    // glm::mat4 projection = glm::ortho(0.0f, (float)window_width, (float)window_height, 0.0f, -1.0f, 1.0f); // adjust for top-left origin
-    int projection_loc = glGetUniformLocation(shader_program, "projection");
-    glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
-
-    // glUseProgram(text_shader_program);
-
+    width = config["width"];
+    height = config["height"];
+    set_projection();
 
 
     std::vector<float> grid_vertices;
-    int window_width = 800;
-    int window_height = 600;
-
-    // vertical lines
-    for (float x = 0.0f; x <= window_width; x += cell_width) {
-        float ndc_x = (x);
-        grid_vertices.push_back(ndc_x);
-        grid_vertices.push_back(1.0f * window_height);
-        grid_vertices.push_back(ndc_x);
-        grid_vertices.push_back(0.0f);
-    }
-
-    // horizontal lines
-    for (float y = 0.0f; y <= window_height; y += cell_height) {
-        float ndc_y = y; // invert y-axis
-        grid_vertices.push_back(1.0f * window_width);
+    float max_x = (float)config["num_rows"] * (float)config["row_height"];
+    float max_y = (float)config["num_cols"] * (float)config["col_width"];
+    for (int i = 0; i <= config["num_rows"]; ++i) {
+        float y = i * (float)config["row_height"];
+        float ndc_y = y;
+        grid_vertices.push_back(max_x);
         grid_vertices.push_back(ndc_y);
         grid_vertices.push_back(0.0f);
         grid_vertices.push_back(ndc_y);
     }
+    for (int j = 0; j <= config["num_cols"]; ++j) {
+        float x = j * (float)config["col_width"];
+        float ndc_x = x;
+        grid_vertices.push_back(ndc_x);
+        grid_vertices.push_back(max_y);
+        grid_vertices.push_back(ndc_x);
+        grid_vertices.push_back(0.0f);
+    }
+
+    glm::vec2 selectedCellPos = glm::vec2(3 * 100.f, 4 * 30.f);
+
+    grid_vertices.push_back(selectedCellPos.x+1);
+    grid_vertices.push_back(selectedCellPos.y+1);
+    grid_vertices.push_back(selectedCellPos.x + 1);
+    grid_vertices.push_back(selectedCellPos.y + 29.f);
+
+    grid_vertices.push_back(selectedCellPos.x+1);
+    grid_vertices.push_back(selectedCellPos.y+1);
+    grid_vertices.push_back(selectedCellPos.x + 99.f);
+    grid_vertices.push_back(selectedCellPos.y + 1);
+
+    grid_vertices.push_back(selectedCellPos.x+1);
+    grid_vertices.push_back(selectedCellPos.y+29.f);
+    grid_vertices.push_back(selectedCellPos.x + 99.f);
+    grid_vertices.push_back(selectedCellPos.y + 29.f);
+
+    grid_vertices.push_back(selectedCellPos.x+99.f);
+    grid_vertices.push_back(selectedCellPos.y+1);
+    grid_vertices.push_back(selectedCellPos.x + 99.f);
+    grid_vertices.push_back(selectedCellPos.y + 29.f);
+
+    // grid_vertices.insert(grid_vertices.end(), { 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 });
+
+
+
 
     // create vbo and vao
     GLuint vbo, vao;
@@ -301,14 +221,27 @@ int main() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glm::mat4 text_proj = glm::ortho(0.0f, 800.0f, 600.0f, 0.0f);
+
+    setSelectedCellColor(shader_program, glm::vec4(0.f, 0.25f, 1.f, 1.0f), selectedCellPos, glm::vec2(100.f, 30.f));
+
+    auto keyupdate_callback = [&vbo, &grid_vertices, &selectedCellPos]() {
+        glm::vec2 oldCellPos = selectedCellPos;
+        selectedCellPos = glm::vec2(offsetX * 100.f, offsetY * 30.f);
+
+        changeSelectedCell(grid_vertices, selectedCellPos , oldCellPos);
+        setSelectedCellColor(shader_program, glm::vec4(0.f, 0.25f, 1.f, 1.0f), selectedCellPos, glm::vec2(100.f, 30.f));
+
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferData(GL_ARRAY_BUFFER, grid_vertices.size() * sizeof(float), grid_vertices.data(), GL_STATIC_DRAW);
+    };
+
 
     GLuint text_vao, text_vbo;
     glGenVertexArrays(1, &text_vao);
     glGenBuffers(1, &text_vbo);
     glBindVertexArray(text_vao);
     glBindBuffer(GL_ARRAY_BUFFER, text_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 6 * 4, nullptr, GL_DYNAMIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(GLfloat), 0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -325,20 +258,75 @@ int main() {
     // set clear color to white for better visibility
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
+
+    InputController input_controller(window);
+
+    input_controller.subscribe([=](GLFWwindow* window, int key, int scancode, int action, int mods) {
+        switch (key) {
+            case GLFW_KEY_LEFT:
+                switch (action) {
+                    case GLFW_PRESS:
+                    case GLFW_REPEAT:
+                        offsetX -= 1;
+                        offsetX = offsetX > 0 ? offsetX : 0;
+                        keyupdate_callback();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+
+            case GLFW_KEY_RIGHT:
+                switch (action) {
+                    case GLFW_PRESS:
+                    case GLFW_REPEAT:
+                        offsetX += 1;
+                        keyupdate_callback();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+
+            case GLFW_KEY_UP:
+                switch (action) {
+                    case GLFW_PRESS:
+                    case GLFW_REPEAT:
+                        offsetY -= 1;
+                        offsetY = offsetY > 0 ? offsetY : 0;
+                        keyupdate_callback();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+
+            case GLFW_KEY_DOWN:
+                switch (action) {
+                    case GLFW_PRESS:
+                    case GLFW_REPEAT:
+                        offsetY += 1;
+                        keyupdate_callback();
+                        break;
+                    default:
+                        break;
+                }
+                break;
+
+            default:
+                break;
+        }
+    });
+
     // render loop
     while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
-
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-            event_log.push_back("Key A Pressed");
-        }
+        input_controller.waitEvents();
 
         if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
             double xpos, ypos;
             glfwGetCursorPos(window, &xpos, &ypos);
             event_log.push_back("Mouse Left Button Pressed at (" + std::to_string(xpos) + ", " + std::to_string(ypos) + ")");
         }
-
 
         // start imgui frame
         ImGui_ImplOpenGL3_NewFrame();
@@ -352,79 +340,31 @@ int main() {
         glDrawArrays(GL_LINES, 0, grid_vertices.size() / 2);
 
 
+
         //////////////////////// Render text /////////////////////
-        
-        std::string text = "Hello, OpenGL!";
-        
+        std::ostringstream textInput;
+        textInput << "Hello, OpenGL! Compiled at " << __TIME__;
+        std::string text = std::move(textInput.str());
 
-        // GLfloat x = 25.0f, y = 25.0f, scale = 1.0f;
-        GLfloat x, y, scale = 1.0f;
-        compute_cell_text_coords(4, 6, &x, &y);
-        // x = y = 0.0f;
-        
-        glm::vec3 color =  glm::vec3(1.0f, 0.0f, 0.0f);
-        glUseProgram(text_shader_program);
-    // glm::mat4 projection = glm::ortho(-(float)padding, (float)width-(float)padding, float(height)-(float)padding, -(float)padding, -1.0f, 1.0f); // adjust for top-left origin
-        // glUniformMatrix4fv(glGetUniformLocation(text_shader_program, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
-        glUniform3f(glGetUniformLocation(text_shader_program, "textColor"), color.x, color.y, color.z);
-        glActiveTexture(GL_TEXTURE0);
-        glBindVertexArray(text_vao);
-
-
-        std::string::const_iterator c;
-        for (c = text.begin(); c != text.end(); c++) {
-            GLuint texture = character_textures[*c];
-   // glUniformMatrix4fv(glGetUniformLocation(text_shader_program, "projection"), 1, GL_FALSE, glm::value_ptr(text_projection));;
-            glm::ivec2 size = character_sizes[*c];
-            glm::ivec2 bearing = character_bearings[*c];
-            GLuint advance = character_advances[*c];
-
-            GLfloat xpos = x + bearing.x * scale;
-            GLfloat ypos = y + (size.y - bearing.y) * scale;
-            GLfloat w = size.x * scale;
-            GLfloat h = size.y * scale;
-
-            GLfloat vertices[6][4] = {
-                { xpos, 28.0f + ypos - h, 0.0f, 0.0f },
-                { xpos, 28.0f + ypos, 0.0f, 1.0f },
-                { xpos + w, 28.0f + ypos, 1.0f, 1.0f },
-
-                { xpos, 28.0f + ypos - h, 0.0f, 0.0f },
-                { xpos + w, 28.0f + ypos, 1.0f, 1.0f },
-                { xpos + w, 28.0f + ypos - h, 1.0f, 0.0f }
-            };
-            /*
-            GLfloat vertices[6][4] = {
-                { xpos, ypos - h, 0.0f, 0.0f },
-                { xpos, ypos, 0.0f, 1.0f },
-                { xpos + w, ypos, 1.0f, 1.0f },
-
-                { xpos, ypos - h, 0.0f, 0.0f },
-                { xpos + w, ypos, 1.0f, 1.0f },
-                { xpos + w, ypos - h, 1.0f, 0.0f }
-            };
-            */
-            glBindTexture(GL_TEXTURE_2D, texture);
-
-            glBindBuffer(GL_ARRAY_BUFFER, text_vbo);
-            glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-            glBindBuffer(GL_ARRAY_BUFFER, 0);
-
-            glDrawArrays(GL_TRIANGLES, 0, 6);
-
-            x += (advance >> 6) * scale; // bitshift by 6 to get value in pixels
-        }
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+        draw_text_in_cell(text_shader_program, text_vao, text_vbo, text, 2, 2);
+        draw_text_in_cell(text_shader_program, text_vao, text_vbo, std::string("D4"), 4,4);
         /////////////////////////Render text /////////////////////
         
+        ImGui::Begin("Framerate", nullptr, ImGuiWindowFlags_NoMove);
+        ImGui::SetWindowPos(ImVec2(0,0));
+
+        framerate_calculator.frame();
+        ImGui::Text("%f", framerate_calculator.getFPS());
+
+        ImGui::End();
+
 
 
         ImGui::Begin("Event Log", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
         ImGui::SetWindowPos(ImVec2(io.DisplaySize.x - ImGui::GetWindowWidth(), io.DisplaySize.y - ImGui::GetWindowHeight()));
 
-        for (const auto& event : event_log) {
-            ImGui::Text("%s", event.c_str());
+        for (auto event = event_log.size() > 100 ? event_log.end()-100 : event_log.begin(); event != event_log.end(); event++) {
+            ImGui::Text("%s", event->c_str());
         }
 
         ImGui::End();
