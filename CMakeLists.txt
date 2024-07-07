@@ -2,20 +2,21 @@ cmake_minimum_required(VERSION 3.10)
 project(hello_world)
 
 set(CMAKE_C_STANDARD 99)
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 # include directories
 include_directories(
         ./glad/include
         ./imgui
         ./imgui/backends
+        ../glfw/glfw/install/include # This library is a fork of glfw on my local machine
         /usr/include/freetype2
         /usr/include/libpng16
 )
 
 # find packages
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GLFW3 REQUIRED glfw3)
+#pkg_check_modules(GLFW3 REQUIRED glfw3)
 pkg_check_modules(FREETYPE2 REQUIRED freetype2)
 
 find_package(fmt REQUIRED)
@@ -26,7 +27,7 @@ add_definitions(-DIMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 # source files
 set(SRCS
-        main2.cpp
+        main.cpp
         glad/src/glad.c
         imgui/imgui.cpp
         imgui/imgui_demo.cpp
@@ -44,6 +45,15 @@ set(SRCS
 #        View.hpp
         Text.hpp
         Model.hpp
+        Store.cpp
+        Store.hpp
+        Subject.cpp
+        Subject.hpp
+        View.hpp
+        SpreadsheetModel.cpp
+        SpreadsheetModel.hpp
+        Cell.cpp
+        Cell.hpp
 )
 
 
@@ -72,7 +82,8 @@ add_executable(hello_world ${SRCS})
 
 # link libraries
 target_link_libraries(hello_world
-        ${GLFW3_STATIC_LDFLAGS}
+#        ${GLFW3_STATIC_LDFLAGS}
+        ../glfw/glfw/install/lib/libglfw3.a
         ${FREETYPE2_STATIC_LDFLAGS}
         dl
         GL

@@ -69,7 +69,7 @@ void main() {
 }
 )";
 
-const char* fragment_shader_source = R"(
+const char* fragment_shader_source_old = R"(
 #version 330 core
 
 in vec2 fragPos; // interpolated fragment position from the vertex shader
@@ -86,6 +86,52 @@ void main() {
         FragColor = selectedCellColor; // set the color of the selected cell
     } else {
         FragColor = vec4(0.0, 0.0, 0.0, 1.0); // default color
+    }
+}
+)";
+
+
+const char* fragment_shader_source = R"(
+#version 330 core
+
+in vec2 fragPos; // interpolated fragment position from the vertex shader
+out vec4 FragColor;
+
+uniform vec4 selectedCellColor; // color of the selected cell
+uniform vec4 shadowColor;       // color of the shadow
+uniform vec2 selectedCellPos;   // position of the selected cell
+uniform vec2 cellSize;          // size of each cell
+uniform float shadowSize;       // size of the shadow extension
+
+void main() {
+    // shadowColor = vec4(1.0, 1.0, 0.0, 1.0);
+
+    // calculate the shadow boundaries
+    vec2 shadowMin = selectedCellPos - vec2(shadowSize);
+    vec2 shadowMax = selectedCellPos + cellSize + vec2(shadowSize);
+
+
+
+    // determine if the current fragment is in the selected cell
+    if (fragPos.x >= selectedCellPos.x && fragPos.x <= selectedCellPos.x + cellSize.x &&
+        fragPos.y >= selectedCellPos.y && fragPos.y <= selectedCellPos.y + cellSize.y) {
+
+        FragColor = selectedCellColor; // set the color of the selected cell
+
+
+        if (fragPos.x >= selectedCellPos.x + 2 && fragPos.x <= selectedCellPos.x + cellSize.x - 2 &&
+            fragPos.y >= selectedCellPos.y + 2 && fragPos.y <= selectedCellPos.y + cellSize.y - 2) {
+            FragColor = vec4(0.0, 0.0, 0.0, 0.0);
+        }
+
+    } else
+    // determine if the current fragment is in the shadow area
+    if (fragPos.x >= shadowMin.x && fragPos.x <= shadowMax.x &&
+        fragPos.y >= shadowMin.y && fragPos.y <= shadowMax.y) {
+        FragColor = shadowColor; // set the color of the shadow
+    } else {
+        // default color if not in shadow or selected cell
+        FragColor = vec4(0.0, 0.0, 0.0, 0.25);
     }
 }
 )";

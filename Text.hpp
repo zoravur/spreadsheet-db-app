@@ -47,7 +47,7 @@ void load_font_textures(const char* font_path) {
         return;
     }
 
-    FT_Set_Pixel_Sizes(face, 0, 30);
+    FT_Set_Pixel_Sizes(face, 0, config["row_height"].get<int>()-2*config["cell_padding"].get<int>());
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1); // disable byte-alignment restriction
 
     for (GLubyte c = 0; c < 128; c++) {
@@ -88,15 +88,15 @@ void load_font_textures(const char* font_path) {
     FT_Done_FreeType(ft);
 }
 
-void compute_cell_text_coords(int i, int j, float *x, float *y) {
-    *x = (float)config["col_width"] * (static_cast<float>(i) - 1) + 1.0f;
-    *y = (float)config["row_height"] * (static_cast<float>(j) - 1) - 1.0f;
+void compute_cell_text_coords(int j, int i, float *x, float *y) {
+    *x = config["col_width"].get<float>() * (static_cast<float>(j) - 1) + (config["cell_padding"].get<float>());
+    *y = config["row_height"].get<float>() * (static_cast<float>(i) - 1) - (config["cell_padding"].get<float>()/2);
 }
 
 
 void draw_text_in_cell(GLuint text_shader_program, GLuint text_vao, GLuint text_vbo, const std::string& text, int i, int j) {
     GLfloat x, y;
-    compute_cell_text_coords(i, j, &x, &y);
+    compute_cell_text_coords(j, i, &x, &y);
 
     constexpr auto color =  glm::vec3(1.0f, 0.0f, 0.0f);
 
@@ -105,6 +105,7 @@ void draw_text_in_cell(GLuint text_shader_program, GLuint text_vao, GLuint text_
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(text_vao);
 
+    glDisable(GL_TEXTURE_2D);
 
     std::string::const_iterator c;
     for (c = text.begin(); c != text.end(); c++) {
@@ -119,14 +120,16 @@ void draw_text_in_cell(GLuint text_shader_program, GLuint text_vao, GLuint text_
         GLfloat w = size.x;
         GLfloat h = size.y;
 
-        GLfloat vertices[6][4] = {
-            { xpos, 28.0f + ypos - h, 0.0f, 0.0f },
-            { xpos, 28.0f + ypos, 0.0f, 1.0f },
-            { xpos + w, 28.0f + ypos, 1.0f, 1.0f },
+        float yposoffset = config["row_height"].get<float>() - config["cell_padding"].get<float>();
 
-            { xpos, 28.0f + ypos - h, 0.0f, 0.0f },
-            { xpos + w, 28.0f + ypos, 1.0f, 1.0f },
-            { xpos + w, 28.0f + ypos - h, 1.0f, 0.0f }
+        GLfloat vertices[6][4] = {
+            { xpos, yposoffset + ypos - h, 0.0f, 0.0f },
+            { xpos, yposoffset + ypos, 0.0f, 1.0f },
+            { xpos + w, yposoffset + ypos, 1.0f, 1.0f },
+
+            { xpos, yposoffset + ypos - h, 0.0f, 0.0f },
+            { xpos + w, yposoffset + ypos, 1.0f, 1.0f },
+            { xpos + w, yposoffset + ypos - h, 1.0f, 0.0f }
         };
 
         glBindTexture(GL_TEXTURE_2D, texture);

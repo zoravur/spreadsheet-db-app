@@ -1,10 +1,14 @@
 {
   "width": 1000,
-  "height":600,
-  "padding": 20,
+  "height": 600,
+  "padding": 20.5,
   "num_rows": 1000,
   "num_cols": 100,
-  "row_height": 30,
+  "row_height": 40,
   "col_width": 100,
+  "cell_padding": 8,
+  "shadow_size": 3,
+  "gl_samples": 20,
+  "scroll_sensitivity": 30,
   "font": "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf"
 }
