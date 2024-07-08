@@ -1,4 +1,4 @@
-A cross between a spreadsheet and a database
+A cross between a spreadsheet and a database (super WIP)
 
 Planned features
 - Real time collaboration
