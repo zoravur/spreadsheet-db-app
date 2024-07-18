@@ -1,14 +1,19 @@
 cmake_minimum_required(VERSION 3.10)
-project(hello_world)
+project(ssdb)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_CXX_STANDARD 17)
 
+add_subdirectory(
+        lib/json
+)
+
 # include directories
 include_directories(
-        ./glad/include
-        ./imgui
-        ./imgui/backends
+        lib/glad/include
+        lib/imgui
+        lib/imgui/backends
+        include
         ../glfw/glfw/install/include # This library is a fork of glfw on my local machine
         /usr/include/freetype2
         /usr/include/libpng16
@@ -27,33 +32,33 @@ add_definitions(-DIMGUI_IMPL_OPENGL_LOADER_GLAD)
 
 # source files
 set(SRCS
-        main.cpp
-        glad/src/glad.c
-        imgui/imgui.cpp
-        imgui/imgui_demo.cpp
-        imgui/imgui_draw.cpp
-        imgui/imgui_tables.cpp
-        imgui/imgui_widgets.cpp
-        imgui/backends/imgui_impl_glfw.cpp
-        imgui/backends/imgui_impl_opengl3.cpp
-        FrameRateCalculator.hpp
-        InputController.cpp
-        InputController.hpp
+        src/main.cpp
+        lib/glad/src/glad.c
+        lib/imgui/imgui.cpp
+        lib/imgui/imgui_demo.cpp
+        lib/imgui/imgui_draw.cpp
+        lib/imgui/imgui_tables.cpp
+        lib/imgui/imgui_widgets.cpp
+        lib/imgui/backends/imgui_impl_glfw.cpp
+        lib/imgui/backends/imgui_impl_opengl3.cpp
+        include/FrameRateCalculator.hpp
+        src/InputController.cpp
+        include/InputController.hpp
 #        Model.cpp
 #        Model.hpp
 #        View.cpp
 #        View.hpp
-        Text.hpp
-        Model.hpp
-        Store.cpp
-        Store.hpp
-        Subject.cpp
-        Subject.hpp
-        View.hpp
-        SpreadsheetModel.cpp
-        SpreadsheetModel.hpp
-        Cell.cpp
-        Cell.hpp
+        include/Text.hpp
+        include/Model.hpp
+        src/Store.cpp
+        include/Store.hpp
+        src/Subject.cpp
+        include/Subject.hpp
+        include/View.hpp
+        src/SpreadsheetModel.cpp
+        include/SpreadsheetModel.hpp
+        src/Cell.cpp
+        include/Cell.hpp
 )
 
 
@@ -78,12 +83,13 @@ add_custom_command(
 add_custom_target(copy-config ALL DEPENDS "${DEST_DIR}/config.json")
 
 # create executable
-add_executable(hello_world ${SRCS})
+add_executable(ssdb ${SRCS})
 
 # link libraries
-target_link_libraries(hello_world
+target_link_libraries(ssdb
 #        ${GLFW3_STATIC_LDFLAGS}
-        ../glfw/glfw/install/lib/libglfw3.a
+#        ../glfw/glfw/install/lib/libglfw3.a
+        /home/zoravur/Documents/side-projects/spreadsheet-db/glfw/glfw/install/lib/libglfw3.a
         ${FREETYPE2_STATIC_LDFLAGS}
         dl
         GL
@@ -93,16 +99,17 @@ target_link_libraries(hello_world
         Xrandr
         Xi
         fmt::fmt
+        nlohmann_json::nlohmann_json
 )
 
 # custom output directory
-set_target_properties(hello_world PROPERTIES
+set_target_properties(ssdb PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
-add_dependencies(hello_world copy-config)
+add_dependencies(ssdb copy-config)
 
 # CMakeLists.txt
 
